@@ -4,7 +4,30 @@ KEYS_DIR=.
 
 yum -y install openvpn
 
-cp $KEYS_DIR/ca.crt $KEYS_DIR/client.crt $KEYS_DIR/client.key /etc/openvpn/
+cd /etc/openvpn
+
+. /usr/share/openvpn/easy-rsa/2.0/vars 
+
+export KEY_PROVINCE="CA"
+export KEY_CITY="SanFrancisco"
+export KEY_ORG="M-Lab"
+export KEY_EMAIL=mail@host.domain
+export KEY_CN=`hostname`
+export KEY_NAME=`hostname`
+export KEY_OU=changeme
+export PKCS11_MODULE_PATH=changeme
+export PKCS11_PIN=1234
+
+wget http://vpn-test.measurementlab.net/ca.crt
+
+openssl req -batch -days 3650 -nodes -new -newkey rsa:1024 -keyout client.key -out client.csr -config /usr/share/openvpn/easy-rsa/2.0/openssl-1.0.0.cnf
+
+wget -O client.crt http://vpn-test.measurementlab.net/sign-csr.php --post-data "csr=`cat client.csr | sed -s s/+/%2B/g`"
+
+if [[ ! -r client.crt || -z `grep "BEGIN CERTIFICATE" client.crt` ]]; then
+  echo Certificate could not be received correctly >&2
+  exit 1
+fi
 
 cat <<EOF >/etc/openvpn/client.conf
 ##############################################
