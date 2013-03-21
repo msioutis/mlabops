@@ -18,11 +18,31 @@ export KEY_OU=changeme
 export PKCS11_MODULE_PATH=changeme
 export PKCS11_PIN=1234
 
-wget http://vpn-test.measurementlab.net/ca.crt
+cat <<EOF >ca.cert
+-----BEGIN CERTIFICATE-----
+MIIDGTCCAoKgAwIBAgIJAM+qaqjZwWxHMA0GCSqGSIb3DQEBBQUAMGcxCzAJBgNV
+BAYTAlVTMQswCQYDVQQIEwJDQTEVMBMGA1UEBxMMU2FuRnJhbmNpc2NvMQ4wDAYD
+VQQKEwVNLUxhYjEkMCIGA1UEAxMbdnBuLXRlc3QubWVhc3VyZW1lbnRsYWIubmV0
+MB4XDTEzMDMwNTE4MDUwOFoXDTIzMDMwMzE4MDUwOFowZzELMAkGA1UEBhMCVVMx
+CzAJBgNVBAgTAkNBMRUwEwYDVQQHEwxTYW5GcmFuY2lzY28xDjAMBgNVBAoTBU0t
+TGFiMSQwIgYDVQQDExt2cG4tdGVzdC5tZWFzdXJlbWVudGxhYi5uZXQwgZ8wDQYJ
+KoZIhvcNAQEBBQADgY0AMIGJAoGBALDtuqRaqUxIGHbbp9caCMWjrDK+DiRqbZ2k
+uH7FG5lYcnjr0QlYS3bmo8qrwOUrQrnWHcXZ7gJtHKT/G06ASEIL/OxpchfBgh12
+PhyYA1X48WLE5zFUu1GVZy62Oa2HEBGMvx2Xav4iKdU79k6MZf1ZcTbDq8YKBKwU
+qRwX1oOBAgMBAAGjgcwwgckwHQYDVR0OBBYEFMsrwVEPZtJEkT3nt9tdD27xTHZL
+MIGZBgNVHSMEgZEwgY6AFMsrwVEPZtJEkT3nt9tdD27xTHZLoWukaTBnMQswCQYD
+VQQGEwJVUzELMAkGA1UECBMCQ0ExFTATBgNVBAcTDFNhbkZyYW5jaXNjbzEOMAwG
+A1UEChMFTS1MYWIxJDAiBgNVBAMTG3Zwbi10ZXN0Lm1lYXN1cmVtZW50bGFiLm5l
+dIIJAM+qaqjZwWxHMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEFBQADgYEAYaT/
+gLdg/5QxSGpv6QNmrzmed+xc6c8VSALEUtzxTYj+N7wBkorVzyFUDW+H5XHt7PXd
+OEg3N8QRwfC9vIssYm4D9FDB4GgOa0Unfz0YvAaguP8pLF3bq8hbHwmOb4YqxYLV
+veW13ZpmuKlAkRJCu/647KLeP428KnhPuqdugbg=
+-----END CERTIFICATE-----
+EOF
 
 openssl req -batch -days 3650 -nodes -new -newkey rsa:1024 -keyout client.key -out client.csr -config /usr/share/openvpn/easy-rsa/2.0/openssl-1.0.0.cnf
 
-wget -O client.crt http://vpn-test.measurementlab.net/sign-csr.php --post-data "csr=`cat client.csr | sed -s s/+/%2B/g`"
+curl -d "csr=`cat client.csr | sed -s s/+/%2B/g`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
 
 if [[ ! -r client.crt || -z `grep "BEGIN CERTIFICATE" client.crt` ]]; then
   echo Certificate could not be received correctly >&2

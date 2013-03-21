@@ -1,7 +1,13 @@
 <?php
+
   $error = "";
   if (isset($_POST["csr"])) {
+    openlog("sign-csr");
+
     $csr = $_POST["csr"];
+
+    syslog(LOG_INFO, "A request for signing the following CSR for $_SERVER[REMOTE_ADDR]:\n" . $csr);
+
     $cn = null;
     $subjects = openssl_csr_get_subject($csr);
     if (isset($subjects["CN"])) {
@@ -20,12 +26,15 @@
           return;
         } else {
           $error = "The CN and client IP address doesnot match!";
+          syslog(LOG_ERR, "Cannot sign the CSR b/c of the conflicts between IP Address of $subjects[CN] ($cn_ip) and $_SERVER[REMOTE_ADDR]");
         }
       } else {
         $error = "I cannot sign, CSR of this CN (hostname)!";
+        syslog(LOG_ERR, "Cannot sign the CSR with CN=$subjects[CN] for $_SERVER[REMOTE_ADDR]");
       }
     } else {
       $error = "Unknown CSR format!";
+      syslog(LOG_ERR, "Unknown CSR format from $_SERVER[REMOTE_ADDR]");
     }
   }
 ?>
