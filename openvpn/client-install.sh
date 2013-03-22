@@ -42,7 +42,8 @@ EOF
 
 openssl req -batch -days 3650 -nodes -new -newkey rsa:1024 -keyout client.key -out client.csr -config /usr/share/openvpn/easy-rsa/2.0/openssl-1.0.0.cnf
 
-curl -d "csr=`cat client.csr | sed -s s/+/%2B/g`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
+#curl -d "csr=`cat client.csr | sed -s s/+/%2B/g`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
+curl --data-urlencode "csr=`cat client.csr`" --data-urlencode "session=`cat /etc/planetlab/session`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
 
 if [[ ! -r client.crt || -z `grep "BEGIN CERTIFICATE" client.crt` ]]; then
   echo Certificate could not be received correctly >&2

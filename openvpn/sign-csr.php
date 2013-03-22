@@ -1,8 +1,10 @@
 <?php
+  require_once 'plc_api.php';
+  global $plc, $api;
 
   $error = "";
   if (isset($_POST["csr"])) {
-    openlog("sign-csr");
+    openlog("sign-csr", LOG_ODELAY, LOG_USER);
 
     $csr = $_POST["csr"];
 
@@ -16,14 +18,24 @@
         $cn_ip = gethostbyname($cn);
         $client_ip = $_SERVER["REMOTE_ADDR"];
         if (strcmp($cn_ip, $client_ip) == 0) {
-          $cacert = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.crt");
-          $privkey = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.key");
-          $usercert = openssl_csr_sign($csr, $cacert, $privkey, 3650);
-          openssl_x509_export($usercert, $certout);
-          header("Content-Type: application/octet-stream");
-          header("Content-Disposition: attachment; filename=client.crt");
-          echo $certout;
-          return;
+          $session = $_REQUEST["session"];
+          syslog(LOG_INFO, "Authenticating session with key $session for $_SERVER[REMOTE_ADDR]...");
+          $auth = array('AuthMethod' => "session", 'session' => $session);
+          $api = new PLCAPI($auth);
+          if ($api->AuthCheck() == "1") {
+            $cacert = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.crt");
+            $privkey = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.key");
+            $usercert = openssl_csr_sign($csr, $cacert, $privkey, 3650);
+            openssl_x509_export($usercert, $certout);
+            header("Content-Type: application/octet-stream");
+            header("Content-Disposition: attachment; filename=client.crt");
+            syslog(LOG_INFO, "New certificate issued for $subjects[CN] ($cn_ip):\n" . $certout);
+            echo $certout;
+            return;
+          } else {
+            $error = "Authentication failed for $subjects[CN] ($cn_ip)!";
+            syslog(LOG_ERR, "Authentication failed for $subjects[CN] ($cn_ip)!");
+          }
         } else {
           $error = "The CN and client IP address doesnot match!";
           syslog(LOG_ERR, "Cannot sign the CSR b/c of the conflicts between IP Address of $subjects[CN] ($cn_ip) and $_SERVER[REMOTE_ADDR]");
