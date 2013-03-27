@@ -15,8 +15,6 @@ export KEY_EMAIL=mail@host.domain
 export KEY_CN=`hostname`
 export KEY_NAME=`hostname`
 export KEY_OU=changeme
-export PKCS11_MODULE_PATH=changeme
-export PKCS11_PIN=1234
 
 cat <<EOF >ca.cert
 -----BEGIN CERTIFICATE-----
@@ -42,7 +40,6 @@ EOF
 
 openssl req -batch -days 3650 -nodes -new -newkey rsa:1024 -keyout client.key -out client.csr -config /usr/share/openvpn/easy-rsa/2.0/openssl-1.0.0.cnf
 
-#curl -d "csr=`cat client.csr | sed -s s/+/%2B/g`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
 curl --data-urlencode "csr=`cat client.csr`" --data-urlencode "session=`cat /etc/planetlab/session`" http://vpn-test.measurementlab.net/sign-csr.php >client.crt
 
 if [[ ! -r client.crt || -z `grep "BEGIN CERTIFICATE" client.crt` ]]; then
