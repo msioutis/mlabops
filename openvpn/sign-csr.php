@@ -1,5 +1,35 @@
 <?php
+  function sign($cn, $csr) {
+    $cacert = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.crt");
+    $privkey = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.key");
+    $usercert = openssl_csr_sign($csr, $cacert, $privkey, 3650);
+    openssl_x509_export($usercert, $certout);
+    syslog(LOG_INFO, "New certificate issued for $cn:\n" . $certout);
+    $fh = fopen("/etc/openvpn/certs/$cn", 'w') or die("Can't open '/etc/openvpn/certs/$cn' file");
+    fwrite($fh, $certout);
+    fclose($fh);
+    return $certout;
+  }
+
+  if (getmyuid() == 0) {
+    if ($_SERVER['argc'] != 3) {
+       echo "php " . $_SERVER['argv'][0] . " <hostname> <csr-filename>\n";
+       return;
+    }
+    $cn = $_SERVER['argv'][1];
+    $csr_file = $_SERVER['argv'][2];
+
+    $csr = file_get_contents($csr_file);
+
+    $cert = sign($cn, $csr);
+
+    echo $cert;
+
+    return;
+  }
+
   require_once 'plc_api.php';
+
   global $plc, $api;
 
   $error = "";
@@ -23,14 +53,10 @@
           $auth = array('AuthMethod' => "session", 'session' => $session);
           $api = new PLCAPI($auth);
           if ($api->AuthCheck() == "1") {
-            $cacert = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.crt");
-            $privkey = file_get_contents("/usr/share/openvpn/easy-rsa/2.0/keys/ca.key");
-            $usercert = openssl_csr_sign($csr, $cacert, $privkey, 3650);
-            openssl_x509_export($usercert, $certout);
+            $cert = sign($cn, $csr);
             header("Content-Type: application/octet-stream");
             header("Content-Disposition: attachment; filename=client.crt");
-            syslog(LOG_INFO, "New certificate issued for $subjects[CN] ($cn_ip):\n" . $certout);
-            echo $certout;
+            echo $cert;
             return;
           } else {
             $error = "Authentication failed for $subjects[CN] ($cn_ip)!";
