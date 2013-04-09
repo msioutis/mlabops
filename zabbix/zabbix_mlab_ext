@@ -119,11 +119,8 @@ def cgroup_memory_percent(arg):
     print float(memory) / memory_max;
 
 def disk_usage(arg):
-    dir = '/'
-    if arg is not None:
-        dir = arg
-    
-    usage = long(os.popen("du -sB1 --exclude=/sys --exclude=/proc --exclude=/dev %s | cut -f 1"%dir).readline())
+    id = int(os.popen("btrfs subvolume list -a / | grep /`cat /etc/slicename`$ | awk '{print $2}'").read())
+    usage = long(os.popen("btrfs qgroup show / | grep 0/%d | awk '{print $2}'" % id).read())
     print usage
 
 def main(argv):
