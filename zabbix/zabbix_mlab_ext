@@ -1,0 +1,160 @@
+#!/usr/bin/python
+
+import sys
+import re
+import pprint
+import time
+import os
+
+def getLibVirtConnection():
+    import libvirt
+    conn = libvirt.openReadOnly("lxc:///")
+    if conn == None:
+        print 'Failed to open connection to the hypervisor'
+        sys.exit(1)
+    return conn
+
+def libvirt_version(arg):
+    print getLibVirtConnection().getVersion()
+
+def libvirt_vms_discovery(arg):
+    conn = getLibVirtConnection()
+    list = conn.listDefinedDomains()
+    for did in conn.listDomainsID():
+        list.append(conn.lookupByID(did).name())
+
+
+    print pprint.pformat({'data': [{"{#VMNAME}" : t} for t in list]}).replace("'", '"')
+
+def getDomain(domainName):
+    try:
+        return getLibVirtConnection().lookupByName(domainName)
+    except:
+        print 'Failed to find the domain: ' + str(domainName)
+        sys.exit(1)
+
+def libvirt_vms_status(arg):
+    import libvirt
+    stateNames = { libvirt.VIR_DOMAIN_RUNNING  : "running",
+                   libvirt.VIR_DOMAIN_BLOCKED  : "idle",
+                   libvirt.VIR_DOMAIN_PAUSED   : "paused",
+                   libvirt.VIR_DOMAIN_SHUTDOWN : "in shutdown",
+                   libvirt.VIR_DOMAIN_SHUTOFF  : "shut off",
+                   libvirt.VIR_DOMAIN_CRASHED  : "crashed",
+                   libvirt.VIR_DOMAIN_NOSTATE  : "no state" }
+    dom = getDomain(arg)
+    state = dom.state(0)
+    print stateNames[state[0]]
+
+def libvirt_vms_cputime(arg):
+    dom = getDomain(arg)
+    cputime = dom.info()[4]
+    print float(cputime) / 1000000000
+
+def libvirt_vms_cpuusage(arg):
+    dom = getDomain(arg)
+    cputime = dom.info()[4]
+    time.sleep(1)
+    newCputime = dom.info()[4]
+    print float(newCputime - cputime) / 1000000000
+
+def libvirt_vms_memory(arg):
+    dom = getDomain(arg)
+    memory = dom.info()[2]
+    print long(memory) * 1024
+
+def libvirt_vms_memory_max(arg):
+    dom = getDomain(arg)
+    memory_max = dom.info()[1]
+    print long(memory_max) * 1024
+
+def libvirt_vms_memory_percent(arg):
+    dom = getDomain(arg)
+    memory_max = dom.info()[1]
+    memory = dom.info()[2]
+    print float(memory) / memory_max;
+
+
+def cgroup_cputime(arg):
+    if arg is None:
+        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
+    else:
+        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+
+    print float(cputime) / 1000000000
+
+def cgroup_cpuusage(arg):
+    if arg is None:
+        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
+    else:
+        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+    time.sleep(1)
+    if arg is None:
+         newCputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
+    else:
+        newCputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+    print float(newCputime - cputime) / 1000000000
+
+def cgroup_memory(arg):
+    if arg is None:
+         memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
+    else:
+         memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
+    print memory
+
+def cgroup_memory_max(arg):
+    if arg is None:
+        memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
+    else:
+        memory_max = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.limit_in_bytes'%arg,'r').read())
+    print memory_max
+
+def cgroup_memory_percent(arg):
+    if arg is None:
+        memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
+        memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
+    else:
+        memory_max = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.limit_in_bytes'%arg,'r').read())
+        memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
+    print float(memory) / memory_max;
+
+def disk_usage(arg):
+    dir = '/'
+    if arg is not None:
+        dir = arg
+    
+    usage = long(os.popen("du -sB1 --exclude=/sys --exclude=/proc --exclude=/dev %s | cut -f 1"%dir).readline())
+    print usage
+
+def main(argv):
+
+    command = None
+    if len(argv) > 1:
+        command = argv[1]
+        
+    if command == None or not re.match("^[a-zA-Z1-9_i\.]+$", command):
+        print 'invalid data key: ' + str(command)
+        sys.exit(1)
+
+    argument = None
+    if len(argv) > 2:
+        argument = argv[2]
+        if len(argument) == 0 or argument[0] == '_':
+            argument = None
+        if argument is not None and not re.match("^[\ a-zA-Z1-9_i\./]+$", argument):
+            print 'invalid argument: ' + argument
+            sys.exit(1)
+
+    command = command.replace('.', '_')
+
+    if not command in globals():
+        print 'could not find function: ' + command
+        sys.exit(1)
+
+    globals()[command](argument)
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv)
+    except KeyboardInterrupt:
+        pass
