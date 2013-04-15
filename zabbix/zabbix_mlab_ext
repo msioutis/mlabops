@@ -74,7 +74,13 @@ def libvirt_vms_memory_percent(arg):
     memory = dom.info()[2]
     print float(memory) / memory_max;
 
-
+def libvirt_get_pid(arg):
+    conn = getLibVirtConnection()
+    for did in conn.listDomainsID():
+        if arg == conn.lookupByID(did).name():
+        	return did
+    return 1
+    
 def cgroup_cputime(arg):
     if arg is None:
         cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
@@ -82,6 +88,16 @@ def cgroup_cputime(arg):
         cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
 
     print float(cputime) / 1000000000
+
+def cgroup_cputime_system(arg):
+    if arg is None:
+        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
+    else:
+        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+
+    cpunum = int(os.popen("grep ^processor /proc/cpuinfo | wc -l").read())
+
+    print float(cputime) / cpunum / 1000000000
 
 def cgroup_cpuusage(arg):
     if arg is None:
@@ -119,9 +135,23 @@ def cgroup_memory_percent(arg):
     print float(memory) / memory_max;
 
 def disk_usage(arg):
-    id = int(os.popen("btrfs subvolume list -a / | grep /`cat /etc/slicename`$ | awk '{print $2}'").read())
-    usage = long(os.popen("btrfs qgroup show / | grep 0/%d | awk '{print $2}'" % id).read())
+    if arg is None:
+        slice_name = open('/etc/slicename').read() 
+        directory = "/"
+    else:
+        slice_name = arg
+        directory = "/vservers/"
+    id = int(os.popen("btrfs subvolume list -a %s | grep -w %s$ | awk '{print $2}'" % (directory, slice_name)).read())
+    usage = long(os.popen("btrfs qgroup show %s | grep 0/%d | awk '{print $2}'" % (directory, id)).read())
     print usage
+
+def vm_uptime(arg):
+    if arg is None:
+    	pid = 1
+    else:
+        pid = libvirt_get_pid(arg)
+    (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat("/proc/%d/" % pid)
+    pprint.pprint(time.time() - ctime)
 
 def main(argv):
 
