@@ -1,0 +1,15 @@
+#!/usr/bin/python
+
+import pprint
+from planetlab.types import *
+
+# name  : the slice name
+# index : the index into the iplist for each node to assign to this slice
+# attr  : a list of slice attributes.
+slice_list = [
+
+    Slice(name="mlab_haamed", index=0),
+    Slice(name="mlab_haamed2", index=1),
+    Slice(name="mlab_haamed3", index=2),
+]
+
