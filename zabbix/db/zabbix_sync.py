@@ -36,8 +36,8 @@ class ZabbixSync(object):
 
     api = None
 
-    def __init__(self, server='localhost', path='/zabbix', username='Admin', password='zabbix', **kwargs):
-        self.api = zabbix_api.ZabbixAPI(server="http://"+server+"/"+path)
+    def __init__(self, server='http://localhost/zabbix', username='Admin', password='zabbix', **kwargs):
+        self.api = zabbix_api.ZabbixAPI(server=server)
         self.api.login(user=username, password=password)
 
     def getHostGroup(self, **kwargs):
@@ -66,7 +66,6 @@ class ZabbixSync(object):
             else:
                 result = list[0]['proxyid']
             self.proxies[name] = result
-            pprint.pprint(result);
         return self.proxies[name]
 
     def getTemplate(self, **kwargs):
