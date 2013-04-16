@@ -165,7 +165,7 @@ def main():
             for i in items:
                 print i['itemid'] + "\t" + i['key_']
         else:
-            items = z.api.item.get({'hostids': [hostid], 'filter': {'key_': args.key}, 'output': 'extend'});
+            items = z.api.item.get({'hostids': [hostid], 'search': {'key_': args.key}, 'output': 'extend'});
             if len(items) == 0:
                 print >>sys.stderr, 'The requested item could not be found!'
                 sys.exit(1)
