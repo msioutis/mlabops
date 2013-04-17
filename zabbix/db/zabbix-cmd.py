@@ -48,16 +48,6 @@ def main():
     get_parser.add_argument("-k", "--key", dest="key",
                             required=True,
                             help="the Zabbix key of the requested value")
-    #get_parser.add_argument("-t", "--type", dest="value_type",
-    #                        choices=["f","c","l","n","s"],
-    #                        required=True,
-    #                        help="the value type of the key:\n"
-    #                             "    f: Numeric (float)\n"
-    #                             "    c: Character\n"
-    #                             "    l: Log\n"
-    #                             "    n: Numeric (unsigned)\n"
-    #                             "    s: Text\n"
-    #                       )
     get_parser.add_argument("-h", "--host", dest="host",
                             help="the requested host")
     get_parser.add_argument("-f", "--from", dest="time_from",
@@ -67,6 +57,8 @@ def main():
     get_parser.add_argument("-l", "--list", dest="list_keys",
                             action="store_true", default=False,
                             help="only lists available keys for the host")
+    get_parser.add_argument("-m", "--max", dest="lines", default=100,
+                            help="values that have been received before or at the given time")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -155,32 +147,48 @@ def main():
                                   proxy=z.proxy_node % (h['index'], site['name']) 
                                  )
     elif args.action == "get":
-        host = z.api.host.get({'filter':{'host': args.host}})
-        if len(host) < 1:
+        hosts = z.api.host.get({'filter':{'host': args.host}, 'output': 'extend'})
+        if len(hosts) < 1:
             print >>sys.stderr, 'The requested host could not be found!'
             sys.exit(1)
-        hostid = host[0]['hostid']
+        hostsMap = dict([(h['hostid'], h) for h in hosts])
+        items = z.api.item.get({'hostids': [h['hostid'] for h in hosts], 'search': {'key_': args.key}, 'output': 'extend'});
+        itemsMap = dict([(i['itemid'], i) for i in items])
         if args.list_keys:
-            items = z.api.item.get({'hostids': [hostid], 'search': {'key_': args.key}, 'output': 'extend'});
             for i in items:
-                print i['itemid'] + "\t" + i['key_']
+                print i['key_']
         else:
-            items = z.api.item.get({'hostids': [hostid], 'search': {'key_': args.key}, 'output': 'extend'});
             if len(items) == 0:
                 print >>sys.stderr, 'The requested item could not be found!'
                 sys.exit(1)
-        
-            itemids = [i['itemid'] for i in items] 
-            data_type = items[0]['data_type']
-            if args.time_from is None and args.time_till is None:
-                print items[0]['lastvalue']
-            else:
-                pprint.pprint(z.api.history.get({'history': data_type,
-                                                 'itemids': itemids,
-                                                 'time_form': args.time_from,
-                                                 'time_till': args.time_till,
-                                                 'output': 'extend'
-                                                }))
+            for data_type in "01234":
+                filtered_items = [i for i in items if i['value_type'] == data_type]
+                if len(filtered_items) == 0:
+                    continue
+                if args.time_from is None and args.time_till is None:
+                    for i in filtered_items:
+                        print "%s,%s,%s,%s,%s" % (hostsMap[i['hostid']]['host'],
+                                                  itemsMap[i['itemid']]['key_'],
+                                                  i['lastclock'],
+                                                  i['lastns'],
+                                                  i['lastvalue']
+                                                 )
+                else:
+                    values = z.api.history.get({'history': data_type,
+                                                'itemids': [i['itemid'] for i in filtered_items],
+                                                'time_form': args.time_from,
+                                                'time_till': args.time_till,
+                                                'output': 'extend',
+                                                'limit': args.lines})
+                    for d in values:
+                        print "%s,%s,%s,%s,%s" % (hostsMap[itemsMap[d['itemid']]['hostid']]['host'],
+                                                  itemsMap[d['itemid']]['key_'],
+                                                  d['clock'],
+                                                  d['ns'],
+                                                  d['value']
+                                                 )
+                    args.lines -= len(values)
+                        
     elif args.action == "remove":
         hosts = []
         if args.object_type == 'host': 

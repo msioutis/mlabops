@@ -5,6 +5,7 @@ import re
 import pprint
 import time
 import os
+from xml.etree import ElementTree
 
 def getLibVirtConnection():
     import libvirt
@@ -80,7 +81,32 @@ def libvirt_get_pid(arg):
         if arg == conn.lookupByID(did).name():
         	return did
     return 1
+
+def get_target_devices(dom):
+  tree=ElementTree.fromstring(dom.XMLDesc(0))
+
+  devices=[]
+
+  for target in tree.findall("devices/interface/target"):
+      dev=target.get("dev")
+  
+      if not dev in devices:
+          devices.append(dev)
+      
+  return devices
+
+def libvirt_net_in(arg):
+    dom = getDomain(arg)
+    dev = get_target_devices(dom)[0]
+    s = dom.interfaceStats(dev)
+    print s[0]
     
+def libvirt_net_out(arg):
+    dom = getDomain(arg)
+    dev = get_target_devices(dom)[0]
+    s = dom.interfaceStats(dev)
+    print s[4]
+
 def cgroup_cputime(arg):
     if arg is None:
         cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
