@@ -18,7 +18,7 @@ def getLibVirtConnection():
 def libvirt_version(arg):
     print getLibVirtConnection().getVersion()
 
-def libvirt_vms_discovery(arg):
+def vm_discovery(arg):
     conn = getLibVirtConnection()
     list = conn.listDefinedDomains()
     for did in conn.listDomainsID():
@@ -34,7 +34,7 @@ def getDomain(domainName):
         print 'Failed to find the domain: ' + str(domainName)
         sys.exit(1)
 
-def libvirt_vms_status(arg):
+def vm_status(arg):
     import libvirt
     stateNames = { libvirt.VIR_DOMAIN_RUNNING  : "running",
                    libvirt.VIR_DOMAIN_BLOCKED  : "idle",
@@ -47,29 +47,29 @@ def libvirt_vms_status(arg):
     state = dom.state(0)
     print stateNames[state[0]]
 
-def libvirt_vms_cputime(arg):
+def libvirt_vm_cputime(arg):
     dom = getDomain(arg)
     cputime = dom.info()[4]
     print float(cputime) / 1000000000
 
-def libvirt_vms_cpuusage(arg):
+def libvirt_vm_cpuusage(arg):
     dom = getDomain(arg)
     cputime = dom.info()[4]
     time.sleep(1)
     newCputime = dom.info()[4]
     print float(newCputime - cputime) / 1000000000
 
-def libvirt_vms_memory(arg):
+def libvirt_vm_memory(arg):
     dom = getDomain(arg)
     memory = dom.info()[2]
     print long(memory) * 1024
 
-def libvirt_vms_memory_max(arg):
+def libvirt_vm_memory_max(arg):
     dom = getDomain(arg)
     memory_max = dom.info()[1]
     print long(memory_max) * 1024
 
-def libvirt_vms_memory_percent(arg):
+def libvirt_vm_memory_percent(arg):
     dom = getDomain(arg)
     memory_max = dom.info()[1]
     memory = dom.info()[2]
@@ -95,19 +95,19 @@ def get_target_devices(dom):
       
   return devices
 
-def libvirt_net_in(arg):
+def vm_net_in(arg):
     dom = getDomain(arg)
     dev = get_target_devices(dom)[0]
     s = dom.interfaceStats(dev)
     print s[0]
     
-def libvirt_net_out(arg):
+def vm_net_out(arg):
     dom = getDomain(arg)
     dev = get_target_devices(dom)[0]
     s = dom.interfaceStats(dev)
     print s[4]
 
-def cgroup_cputime(arg):
+def vm_cputime(arg):
     if arg is None:
         cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
     else:
@@ -115,7 +115,7 @@ def cgroup_cputime(arg):
 
     print float(cputime) / 1000000000
 
-def cgroup_cputime_system(arg):
+def vm_cputime_system(arg):
     if arg is None:
         cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
     else:
@@ -125,33 +125,21 @@ def cgroup_cputime_system(arg):
 
     print float(cputime) / cpunum / 1000000000
 
-def cgroup_cpuusage(arg):
-    if arg is None:
-        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
-    else:
-        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
-    time.sleep(1)
-    if arg is None:
-         newCputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
-    else:
-        newCputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
-    print float(newCputime - cputime) / 1000000000
-
-def cgroup_memory(arg):
+def vm_memory(arg):
     if arg is None:
          memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
     else:
          memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
     print memory
 
-def cgroup_memory_max(arg):
+def vm_memory_max(arg):
     if arg is None:
         memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
     else:
         memory_max = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.limit_in_bytes'%arg,'r').read())
     print memory_max
 
-def cgroup_memory_percent(arg):
+def vm_memory_percent(arg):
     if arg is None:
         memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
         memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
@@ -160,7 +148,7 @@ def cgroup_memory_percent(arg):
         memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
     print float(memory) / memory_max;
 
-def disk_usage(arg):
+def vm_disk_usage(arg):
     if arg is None:
         slice_name = open('/etc/slicename').read() 
         directory = "/"

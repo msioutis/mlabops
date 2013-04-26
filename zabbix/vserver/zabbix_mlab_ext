@@ -1,0 +1,111 @@
+#!/usr/bin/python
+
+import sys
+import re
+import pprint
+import time
+import os
+from xml.etree import ElementTree
+
+def vm_discovery(arg):
+    vm_list = [v for v in os.listdir("/etc/vservers/") if not v.startswith(".")]
+
+    print pprint.pformat({'data': [{"{#VMNAME}" : t} for t in vm_list]}).replace("'", '"')
+
+def vm_status(arg):
+    stateNames = [ "running",
+                   "shut off"]
+    state = 1
+    if os.path.isfile("/etc/vservers/%s/run" % arg):
+      state = 0
+    print stateNames[state]
+
+
+def vm_net_in(arg):
+    result = 0
+    if os.path.isfile("/etc/vservers/%s/run" % arg):
+        id = int(open("/etc/vservers/%s/run" % arg).read())
+        lines = open("/proc/virtual/%d/cacct" % id).read()
+        inet_line = [l for l in lines.splitlines() if l.startswith("INET:")][0]
+        received = inet_line.split("\t")[1].strip()
+        result = received.split("/")[1]
+    print result
+    
+def vm_net_out(arg):
+    result = 0
+    if os.path.isfile("/etc/vservers/%s/run" % arg):
+        id = int(open("/etc/vservers/%s/run" % arg).read())
+        lines = open("/proc/virtual/%d/cacct" % id).read()
+        inet_line = [l for l in lines.splitlines() if l.startswith("INET:")][0]
+        sent = inet_line.split("\t")[2].strip()
+        result = sent.split("/")[1]
+    print result
+
+def vm_cputime(arg):
+    cputime = long(open('/dev/cgroup/%s/cpuacct.usage' % arg, 'r').read())
+
+    print float(cputime) / 1000000000
+
+def vm_cputime_system(arg):
+    cputime = long(open('/dev/cgroup/%s/cpuacct.usage' % arg, 'r').read())
+
+    cpunum = int(os.popen("grep ^processor /proc/cpuinfo | wc -l").read())
+
+    print float(cputime) / cpunum / 1000000000
+
+def vm_memory(arg):
+    memory = long(open('/dev/cgroup/%s/memory.usage_in_bytes' % arg, 'r').read())
+    print memory
+
+def vm_memory_max(arg):
+    memory_max = long(open('/dev/cgroup/%s/memory.limit_in_bytes' % arg, 'r').read())
+    print memory_max
+
+def vm_memory_percent(arg):
+    memory_max = long(open('/dev/cgroup/%s/memory.limit_in_bytes' % arg, 'r').read())
+    memory = long(open('/dev/cgroup/%s/memory.usage_in_bytes' % arg, 'r').read())
+    print float(memory) / memory_max;
+
+def vm_disk_usage(arg):
+    r = os.popen("vdlimit --xid '%s' /vservers/" % arg).read()
+    for l in r.splitlines():
+        if l.startswith("space_used="):
+            print long(l[11:]) * 1024
+            return
+    print -1
+
+def vm_uptime(arg):
+    print -1
+
+def main(argv):
+
+    command = None
+    if len(argv) > 1:
+        command = argv[1]
+        
+    if command == None or not re.match("^[a-zA-Z1-9_i\.]+$", command):
+        print 'invalid data key: ' + str(command)
+        sys.exit(1)
+
+    argument = None
+    if len(argv) > 2:
+        argument = argv[2]
+        if len(argument) == 0 or argument[0] == '_':
+            argument = None
+        if argument is not None and not re.match("^[\ a-zA-Z1-9_i\./]+$", argument):
+            print 'invalid argument: ' + argument
+            sys.exit(1)
+
+    command = command.replace('.', '_')
+
+    if not command in globals():
+        print 'could not find function: ' + command
+        sys.exit(1)
+
+    globals()[command](argument)
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv)
+    except KeyboardInterrupt:
+        pass
