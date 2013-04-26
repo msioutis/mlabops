@@ -50,6 +50,12 @@ def main():
                             help="the Zabbix key of the requested value")
     get_parser.add_argument("-h", "--host", dest="host",
                             help="the requested host")
+    get_parser.add_argument("-n", "--node", dest="node",
+                            help="the requested node")
+    get_parser.add_argument("-s", "--site", dest="site",
+                            help="the requested site")
+    get_parser.add_argument("-a", "--all", dest="all", default=False, action="store_true",
+                            help="select all available hosts")
     get_parser.add_argument("-f", "--from", dest="time_from",
                             help="values that have been received after or at the given time")
     get_parser.add_argument("-t", "--till", dest="time_till",
@@ -147,9 +153,25 @@ def main():
                                   proxy=z.proxy_node % (h['index'], site['name']) 
                                  )
     elif args.action == "get":
-        hosts = z.api.host.get({'filter':{'host': args.host}, 'output': 'extend'})
+        if args.all:
+            hosts = z.api.host.get({'output': 'extend'})
+        elif args.node is not None:
+            hostgroup_name = "Node %s Group" % args.node.replace('.measurement-lab.org', '')
+            hg = z.api.hostgroup.get({'filter':{'name': hostgroup_name}, 'output': 'extend', 'selectHosts': 'extend'})
+            if len(hg) >= 1:
+                hosts = hg[0]['hosts']
+        elif args.site is not None:
+            hostgroup_name = "Site %s Group" % args.site.replace('.measurement-lab.org', '')
+            hg = z.api.hostgroup.get({'filter':{'name': hostgroup_name}, 'output': 'extend', 'selectHosts': 'extend'})
+            if len(hg) >= 1:
+                hosts = hg[0]['hosts']
+
+        elif args.host is not None: 
+            hosts = z.api.host.get({'filter': {'host': args.host}, 'output': 'extend'})
+        else:
+            hosts = []
         if len(hosts) < 1:
-            print >>sys.stderr, 'The requested host could not be found!'
+            print >>sys.stderr, 'No host could be found!'
             sys.exit(1)
         hostsMap = dict([(h['hostid'], h) for h in hosts])
         items = z.api.item.get({'hostids': [h['hostid'] for h in hosts], 'search': {'key_': args.key}, 'output': 'extend'});
