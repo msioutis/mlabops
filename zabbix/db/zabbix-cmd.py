@@ -26,9 +26,12 @@ def main():
                         help="don't print the logs to stdout")
 
     subparser = parser.add_subparsers(dest='action')
-    sync_parser = subparser.add_parser("sync",
-                                       add_help=False,
-                                       description="Syncs Zabbix server with ops DB. It only adds new sites, nodes and slices.")
+    sync_single_agent_parser = subparser.add_parser("sync-single-agent",
+                                                    add_help=False,
+                                                    description="Syncs Zabbix server with ops DB for a Single-Agent arch. It only adds new sites, nodes. The slices data are stored in nodes.")
+    sync_multi_agent_parser = subparser.add_parser("sync-multi-agent",
+                                                   add_help=False,
+                                                   description="Syncs Zabbix server with ops DB for a Multi-Agent arch. It only adds new sites, nodes and VMs of each slice.")
 
     remove_parser = subparser.add_parser("remove",
                                          add_help=False,
@@ -69,7 +72,9 @@ def main():
     if len(sys.argv) == 1:
         parser.print_help()
         print
-        sync_parser.print_help()
+        sync_single_agent_parser.print_help()
+        print
+        sync_multi_agent_parser.print_help()
         print
         remove_parser.print_help()
         print
@@ -95,7 +100,29 @@ def main():
                 h = site['nodes'][host]
                 sslice.add_node_address(h)
 
-    if args.action == "sync":
+    if args.action == "sync-single-agent":
+        print "Checking hostgroups..."
+        z.getHostGroup(name=z.hostgroup_all_nodes)
+
+        for site in site_list:
+            z.getHostGroup(name=z.hostgroup_site % site['name'])
+
+        print "Checking templates..."
+        z.getTemplate(name=z.template_nodes, templates=[])
+
+        print "Creating hosts..."
+        for site in site_list:
+            for node in site['nodes']:
+                h = site['nodes'][node]
+                z.getHost(name=z.node_hostname % (h['index'], site['name']),
+                          visibleName=z.host_node % (h['index'], site['name']),
+                          ip=h.interface()['ip'],
+                          groups=[z.hostgroup_all_nodes,
+                                  z.hostgroup_site % site['name'],
+                                  ],
+                          templates=[z.template_nodes])
+
+    if args.action == "sync-multi-agent":
         print "Checking hostgroups..."
         z.getHostGroup(name=z.hostgroup_all_servers)
         z.getHostGroup(name=z.hostgroup_all_nodes)

@@ -118,20 +118,22 @@ class ZabbixSync(object):
             templateids = [{'templateid': self.getTemplate(name=t)} for t in kwargs['templates']]
             if len(list) == 0:
                 print "Trying to create host '%s'" % name
-                result = self.api.host.create(
-                        {'host': name,
-                         'name': visibleName,
-                         'interfaces': [{'type': 1,
-                                         'main': 1,
-                                         'useip': 1,
-                                         'ip': ip,
-                                         'dns': '',
-                                         'port': 10050}],
-                         'templates': templateids,
-                         'groups': groupids,
-                         'macros' :  macros,
-                         'proxy_hostid': self.getProxy(name=proxy)
-                        })['hostids'][0]
+                create_opt = {
+                              'host': name,
+                              'name': visibleName,
+                              'interfaces': [{'type': 1,
+                                              'main': 1,
+                                              'useip': 1,
+                                              'ip': ip,
+                                              'dns': '',
+                                              'port': 10050}],
+                              'templates': templateids,
+                              'groups': groupids,
+                              'macros' : macros
+                             }
+                if proxy is not None:
+                    create_opt['proxy_hostid'] = self.getProxy(name=proxy)
+                result = self.api.host.create(create_opt)['hostids'][0]
             else:
                 result = list[0]['hostid']
             self.hosts[name] = result
