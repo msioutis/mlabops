@@ -5,23 +5,24 @@ import re
 import pprint
 import time
 import os
+import multiprocessing
 from xml.etree import ElementTree
 
-def vm_discovery(arg):
+def key_vm_discovery(arg):
     vm_list = [v for v in os.listdir("/etc/vservers/") if not v.startswith(".")]
 
-    print pprint.pformat({'data': [{"{#VMNAME}" : t} for t in vm_list]}).replace("'", '"')
+    return pprint.pformat({'data': [{"{#VMNAME}" : t} for t in vm_list]}).replace("'", '"')
 
-def vm_status(arg):
+def key_vm_status(arg):
     stateNames = [ "running",
                    "shut off"]
     state = 1
     if os.path.isfile("/etc/vservers/%s/run" % arg):
       state = 0
-    print stateNames[state]
+    return stateNames[state]
 
 
-def vm_net_in(arg):
+def key_vm_net_in(arg):
     result = 0
     if os.path.isfile("/etc/vservers/%s/run" % arg):
         id = int(open("/etc/vservers/%s/run" % arg).read())
@@ -29,9 +30,9 @@ def vm_net_in(arg):
         inet_line = [l for l in lines.splitlines() if l.startswith("INET:")][0]
         received = inet_line.split("\t")[1].strip()
         result = received.split("/")[1]
-    print result
+    return result
     
-def vm_net_out(arg):
+def key_vm_net_out(arg):
     result = 0
     if os.path.isfile("/etc/vservers/%s/run" % arg):
         id = int(open("/etc/vservers/%s/run" % arg).read())
@@ -39,43 +40,52 @@ def vm_net_out(arg):
         inet_line = [l for l in lines.splitlines() if l.startswith("INET:")][0]
         sent = inet_line.split("\t")[2].strip()
         result = sent.split("/")[1]
-    print result
+    return result
 
-def vm_cputime(arg):
-    cputime = long(open('/dev/cgroup/%s/cpuacct.usage' % arg, 'r').read())
+def key_vm_cputime(arg):
+    cfg = '/dev/cgroup/%s/cpuacct.usage' % arg
+    if os.path.isfile(cfg):
+        cputime = long(open(cfg, 'r').read())
+        return float(cputime) / 1000000000
+    return ''
 
-    print float(cputime) / 1000000000
+def key_vm_cputime_system(arg):
+    cputime = key_vm_cputime(arg)
+    if cputime != '':
+        cpunum = multiprocessing.cpu_count()
+        return cputime / cpunum
+    return ''
 
-def vm_cputime_system(arg):
-    cputime = long(open('/dev/cgroup/%s/cpuacct.usage' % arg, 'r').read())
+def key_vm_memory(arg):
+    cfg = '/dev/cgroup/%s/memory.usage_in_bytes' % arg
+    if os.path.isfile(cfg):
+        memory = long(open(cfg, 'r').read())
+        return memory
+    return ''
 
-    cpunum = int(os.popen("grep ^processor /proc/cpuinfo | wc -l").read())
+def key_vm_memory_max(arg):
+    cfg = '/dev/cgroup/%s/memory.limit_in_bytes' % arg
+    if os.path.isfile(cfg):
+        memory_max = long(open(cfg, 'r').read())
+        return memory_max
+    return ''
 
-    print float(cputime) / cpunum / 1000000000
+def key_vm_memory_percent(arg):
+    memory_max = key_vm_memory_max(arg)
+    memory = key_vm_memory(arg)
+    if memory != '':
+        return float(memory) / memory_max;
+    return ''
 
-def vm_memory(arg):
-    memory = long(open('/dev/cgroup/%s/memory.usage_in_bytes' % arg, 'r').read())
-    print memory
-
-def vm_memory_max(arg):
-    memory_max = long(open('/dev/cgroup/%s/memory.limit_in_bytes' % arg, 'r').read())
-    print memory_max
-
-def vm_memory_percent(arg):
-    memory_max = long(open('/dev/cgroup/%s/memory.limit_in_bytes' % arg, 'r').read())
-    memory = long(open('/dev/cgroup/%s/memory.usage_in_bytes' % arg, 'r').read())
-    print float(memory) / memory_max;
-
-def vm_disk_usage(arg):
+def key_vm_disk_usage(arg):
     r = os.popen("vdlimit --xid '%s' /vservers/" % arg).read()
     for l in r.splitlines():
         if l.startswith("space_used="):
-            print long(l[11:]) * 1024
-            return
-    print -1
+            return long(l[11:]) * 1024
+    return ''
 
-def vm_uptime(arg):
-    print -1
+def key_vm_uptime(arg):
+    return 0
 
 def main(argv):
 
@@ -97,12 +107,14 @@ def main(argv):
             sys.exit(1)
 
     command = command.replace('.', '_')
+    func = "key_%s" % command
 
-    if not command in globals():
-        print 'could not find function: ' + command
+    if not func in globals():
+        print 'could not find function: ' + func
         sys.exit(1)
 
-    globals()[command](argument)
+    result = globals()[func](argument)
+    print result
 
 if __name__ == "__main__":
     try:

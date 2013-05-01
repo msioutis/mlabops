@@ -5,6 +5,7 @@ import re
 import pprint
 import time
 import os
+import multiprocessing
 from xml.etree import ElementTree
 
 def getLibVirtConnection():
@@ -15,17 +16,17 @@ def getLibVirtConnection():
         sys.exit(1)
     return conn
 
-def libvirt_version(arg):
-    print getLibVirtConnection().getVersion()
+def key_libvirt_version(arg):
+    return getLibVirtConnection().getVersion()
 
-def vm_discovery(arg):
+def key_vm_discovery(arg):
     conn = getLibVirtConnection()
     list = conn.listDefinedDomains()
     for did in conn.listDomainsID():
         list.append(conn.lookupByID(did).name())
 
 
-    print pprint.pformat({'data': [{"{#VMNAME}" : t} for t in list]}).replace("'", '"')
+    return pprint.pformat({'data': [{"{#VMNAME}" : t} for t in list]}).replace("'", '"')
 
 def getDomain(domainName):
     try:
@@ -34,7 +35,7 @@ def getDomain(domainName):
         print 'Failed to find the domain: ' + str(domainName)
         sys.exit(1)
 
-def vm_status(arg):
+def key_vm_status(arg):
     import libvirt
     stateNames = { libvirt.VIR_DOMAIN_RUNNING  : "running",
                    libvirt.VIR_DOMAIN_BLOCKED  : "idle",
@@ -45,35 +46,28 @@ def vm_status(arg):
                    libvirt.VIR_DOMAIN_NOSTATE  : "no state" }
     dom = getDomain(arg)
     state = dom.state(0)
-    print stateNames[state[0]]
+    return stateNames[state[0]]
 
-def libvirt_vm_cputime(arg):
+def key_libvirt_vm_cputime(arg):
     dom = getDomain(arg)
     cputime = dom.info()[4]
-    print float(cputime) / 1000000000
+    return float(cputime) / 1000000000
 
-def libvirt_vm_cpuusage(arg):
-    dom = getDomain(arg)
-    cputime = dom.info()[4]
-    time.sleep(1)
-    newCputime = dom.info()[4]
-    print float(newCputime - cputime) / 1000000000
-
-def libvirt_vm_memory(arg):
+def key_libvirt_vm_memory(arg):
     dom = getDomain(arg)
     memory = dom.info()[2]
-    print long(memory) * 1024
+    return long(memory) * 1024
 
-def libvirt_vm_memory_max(arg):
+def key_libvirt_vm_memory_max(arg):
     dom = getDomain(arg)
     memory_max = dom.info()[1]
-    print long(memory_max) * 1024
+    return long(memory_max) * 1024
 
-def libvirt_vm_memory_percent(arg):
+def key_libvirt_vm_memory_percent(arg):
     dom = getDomain(arg)
     memory_max = dom.info()[1]
     memory = dom.info()[2]
-    print float(memory) / memory_max;
+    return float(memory) / memory_max;
 
 def libvirt_get_pid(arg):
     conn = getLibVirtConnection()
@@ -95,77 +89,78 @@ def get_target_devices(dom):
       
   return devices
 
-def vm_net_in(arg):
+def key_vm_net_in(arg):
     dom = getDomain(arg)
     dev = get_target_devices(dom)[0]
     s = dom.interfaceStats(dev)
-    print s[0]
+    return s[0]
     
-def vm_net_out(arg):
+def key_vm_net_out(arg):
     dom = getDomain(arg)
     dev = get_target_devices(dom)[0]
     s = dom.interfaceStats(dev)
-    print s[4]
+    return s[4]
 
-def vm_cputime(arg):
+def getCGroupDir(arg, cgroup_subsys, subpath = ""):
     if arg is None:
-        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
-    else:
-        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+        for line in open('/proc/%d/cgroup' % os.getpid()):
+            if cgroup_subsys in line:
+                return "/sys/fs/cgroup/%s/%s/" % (cgroup_subsys, line.split(":")[2].strip())
+    return '/sys/fs/cgroup/%s/%s/libvirt/lxc/%s/' % (cgroup_subsys, subpath, arg)
 
-    print float(cputime) / 1000000000
+def key_vm_cputime(arg):
+    cgf = getCGroupDir(arg, 'cpuacct', "system/libvirtd.service") + 'cpuacct.usage';
+    cputime = long(open(cgf, 'r').read())
+    return float(cputime) / 1000000000
 
-def vm_cputime_system(arg):
-    if arg is None:
-        cputime = long(os.popen("cat /sys/fs/cgroup/cpuacct/`cat /proc/$$/cgroup | grep cpuacct | cut -d: -f 3`/cpuacct.usage").readline())
-    else:
-        cputime = long(open('/sys/fs/cgroup/cpuacct/system/libvirtd.service/libvirt/lxc/%s/cpuacct.usage'%arg,'r').read())
+def key_vm_cputime_system(arg):
+    cputime = key_vm_cputime(arg)
+    cpunum = multiprocessing.cpu_count()
 
-    cpunum = int(os.popen("grep ^processor /proc/cpuinfo | wc -l").read())
+    return float(cputime) / cpunum 
 
-    print float(cputime) / cpunum / 1000000000
+def key_vm_memory(arg):
+    cgf = getCGroupDir(arg, 'memory') + 'memory.usage_in_bytes';
+    memory = long(open(cgf, 'r').read())
+    return memory
 
-def vm_memory(arg):
-    if arg is None:
-         memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
-    else:
-         memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
-    print memory
+def key_vm_memory_max(arg):
+    cgf = getCGroupDir(arg, 'memory') + 'memory.limit_in_bytes';
+    memory_max = long(open(cgf, 'r').read())
+    return memory_max
 
-def vm_memory_max(arg):
-    if arg is None:
-        memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
-    else:
-        memory_max = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.limit_in_bytes'%arg,'r').read())
-    print memory_max
+def key_vm_memory_percent(arg):
+    memory = key_vm_memory(arg)
+    memory_max = key_vm_memory_max(arg)
+    
+    return float(memory) / memory_max;
 
-def vm_memory_percent(arg):
-    if arg is None:
-        memory_max = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.limit_in_bytes").readline())
-        memory = long(os.popen("cat /sys/fs/cgroup/memory/`cat /proc/$$/cgroup | grep memory | cut -d: -f 3`/memory.usage_in_bytes").readline())
-    else:
-        memory_max = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.limit_in_bytes'%arg,'r').read())
-        memory = long(open('/sys/fs/cgroup/memory/libvirt/lxc/%s/memory.usage_in_bytes'%arg,'r').read())
-    print float(memory) / memory_max;
-
-def vm_disk_usage(arg):
+def key_vm_disk_usage(arg):
     if arg is None:
         slice_name = open('/etc/slicename').read() 
         directory = "/"
     else:
         slice_name = arg
         directory = "/vservers/"
-    id = int(os.popen("btrfs subvolume list -a %s | grep -w %s$ | awk '{print $2}'" % (directory, slice_name)).read())
-    usage = long(os.popen("btrfs qgroup show %s | grep 0/%d | awk '{print $2}'" % (directory, id)).read())
-    print usage
+    id = 0
+    for line in os.popen("btrfs subvolume list -a %s" % directory):
+        line = line.strip()
+        if line.endswith("/" + slice_name) or line.endswith(" " + slice_name):
+            id = int(line.split(" ")[1])
+            break
+    usage = ""
+    for line in os.popen("btrfs qgroup show %s" % directory):
+        if line.startswith("0/%s" % id):
+            usage = long(line.split(" ")[1]) 
+    return usage
 
-def vm_uptime(arg):
+def key_vm_uptime(arg):
     if arg is None:
     	pid = 1
     else:
         pid = libvirt_get_pid(arg)
     (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat("/proc/%d/" % pid)
-    pprint.pprint(time.time() - ctime)
+    return time.time() - ctime
 
 def main(argv):
 
@@ -187,12 +182,14 @@ def main(argv):
             sys.exit(1)
 
     command = command.replace('.', '_')
+    func = "key_%s" % command
 
-    if not command in globals():
-        print 'could not find function: ' + command
+    if not func in globals():
+        print 'could not find function: ' + func
         sys.exit(1)
 
-    globals()[command](argument)
+    result = globals()[func](argument)
+    print result
 
 if __name__ == "__main__":
     try:
